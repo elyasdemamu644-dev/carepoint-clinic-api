@@ -1,5 +1,10 @@
 # CarePoint Clinic — Healthcare Appointment Booking API
 
+## Author
+
+- Name: Elyas Demamu
+- ID: 0489/17
+
 Assignment 7: Healthcare Appointment Booking API
 Course: Backend Development with Node.js & TypeScript
 
