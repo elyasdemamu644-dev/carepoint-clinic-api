@@ -1,0 +1,38 @@
+### Health
+GET http://localhost:3000/api/health
+
+### Create appointment
+POST http://localhost:3000/api/appointments
+Content-Type: application/json
+
+{
+  "patientName": "Abebe Kebede",
+  "patientEmail": "ABEBE@example.com",
+  "patientPhone": "+251911234567",
+  "department": "GENERAL_PRACTICE",
+  "appointmentDate": "2099-09-02T10:30:00.000Z",
+  "symptoms": "Persistent headache for three days"
+}
+
+### List
+GET http://localhost:3000/api/appointments
+
+### Filter
+GET http://localhost:3000/api/appointments?department=GENERAL_PRACTICE&isEmergency=false&search=headache
+
+### Stats
+GET http://localhost:3000/api/appointments/stats/overview
+
+### Get by ID
+GET http://localhost:3000/api/appointments/REPLACE_ID
+
+### Update
+PATCH http://localhost:3000/api/appointments/REPLACE_ID
+Content-Type: application/json
+
+{
+  "symptoms": "Updated symptoms with enough detail"
+}
+
+### Delete
+DELETE http://localhost:3000/api/appointments/REPLACE_ID

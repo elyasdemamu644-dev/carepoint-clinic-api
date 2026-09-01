@@ -1,0 +1,29 @@
+{
+  "name": "carepoint-clinic-api",
+  "version": "1.0.0",
+  "description": "Healthcare Appointment Booking API for Assignment 7",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "tsx tests/api.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["nodejs", "typescript", "express", "zod", "healthcare", "appointments"],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.30",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
