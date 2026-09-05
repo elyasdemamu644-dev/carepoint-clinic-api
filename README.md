@@ -124,7 +124,7 @@ curl -X POST http://localhost:3000/api/appointments \
     "patientEmail": "ABEBE@example.com",
     "patientPhone": "+251911234567",
     "department": "GENERAL_PRACTICE",
-    "appointmentDate": "2026-09-02T10:30:00.000Z",
+    "appointmentDate": "2099-09-02T10:30:00.000Z",
     "symptoms": "Persistent headache for three days",
     "isEmergency": false
   }'
@@ -157,7 +157,7 @@ Returns HTTP `400` with a field-level validation error explaining that the appoi
   "patientEmail": "not-an-email",
   "patientPhone": "123",
   "department": "DENTISTRY",
-  "appointmentDate": "2026-09-02T11:00:00.000Z",
+  "appointmentDate": "2099-09-02T11:00:00.000Z",
   "symptoms": "Tooth pain when eating food"
 }
 ```

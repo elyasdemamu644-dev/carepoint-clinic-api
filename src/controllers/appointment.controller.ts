@@ -14,8 +14,9 @@ import type {
 } from '../schemas/appointment.schema.js';
 
 type ValidatedCreate = { body: CreateAppointmentInput };
-type ValidatedUpdate = { body: UpdateAppointmentInput };
+type ValidatedUpdate = { body: UpdateAppointmentInput; params: { id: string } };
 type ValidatedList = { query: ListAppointmentsQuery };
+type ValidatedId = { params: { id: string } };
 
 export function createAppointmentController(_req: Request, res: Response): void {
   const validated = res.locals.validated as ValidatedCreate;
@@ -30,18 +31,20 @@ export function listAppointmentsController(_req: Request, res: Response): void {
 }
 
 export function getAppointmentController(req: Request, res: Response): void {
-  const appointment = getAppointmentById(req.params.id);
+  const validated = res.locals.validated as ValidatedId;
+  const appointment = getAppointmentById(validated.params.id);
   res.status(200).json({ status: 'success', data: appointment });
 }
 
 export function updateAppointmentController(req: Request, res: Response): void {
   const validated = res.locals.validated as ValidatedUpdate;
-  const appointment = updateAppointment(req.params.id, validated.body);
+  const appointment = updateAppointment(validated.params.id, validated.body);
   res.status(200).json({ status: 'success', data: appointment });
 }
 
 export function deleteAppointmentController(req: Request, res: Response): void {
-  deleteAppointment(req.params.id);
+  const validated = res.locals.validated as ValidatedId;
+  deleteAppointment(validated.params.id);
   res.status(204).send();
 }
 

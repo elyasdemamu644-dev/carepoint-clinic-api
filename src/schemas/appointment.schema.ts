@@ -54,19 +54,21 @@ export const CreateAppointmentSchema = z.object({
   params: z.record(z.unknown()).optional(),
 });
 
+const AppointmentParamsSchema = z.object({
+  id: z.string().trim().min(1, 'Appointment ID is required'),
+});
+
 export const UpdateAppointmentSchema = z.object({
   body: AppointmentFieldsSchema.partial().refine((body) => Object.keys(body).length > 0, {
     message: 'At least one editable field is required',
     path: [],
   }),
+  params: AppointmentParamsSchema,
   query: z.record(z.unknown()).optional(),
-  params: z.record(z.unknown()).optional(),
 });
 
 export const AppointmentIdSchema = z.object({
-  params: z.object({
-    id: z.string().trim().min(1, 'Appointment ID is required'),
-  }),
+  params: AppointmentParamsSchema,
   body: z.record(z.unknown()).optional(),
   query: z.record(z.unknown()).optional(),
 });
@@ -85,6 +87,6 @@ export const ListAppointmentsSchema = z.object({
 });
 
 export type CreateAppointmentInput = z.infer<typeof AppointmentFieldsSchema>;
-export type UpdateAppointmentInput = z.infer<typeof AppointmentFieldsSchema>;
+export type UpdateAppointmentInput = z.infer<typeof UpdateAppointmentSchema>['body'];
 export type Department = z.infer<typeof DepartmentEnum>;
 export type ListAppointmentsQuery = z.infer<typeof ListAppointmentsSchema>['query'];
