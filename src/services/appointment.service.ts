@@ -1,133 +1,152 @@
-import { randomUUID } from 'node:crypto';
-import type {
-  CreateAppointmentInput,
-  Department,
-  ListAppointmentsQuery,
-  UpdateAppointmentInput,
-} from '../schemas/appointment.schema.js';
+import { AppointmentStatus, Prisma, type Department } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
+import type { CreateAppointmentInput, ListAppointmentsInput, UpdateAppointmentInput, UpdateStatusInput } from '../schemas/appointment.schema.js';
 
-export interface Appointment {
-  id: string;
-  patientName: string;
-  patientEmail: string;
-  patientPhone: string;
-  department: Department;
-  appointmentDate: string;
-  isEmergency: boolean;
-  symptoms: string;
-  createdAt: string;
-  updatedAt: string;
+export class AppointmentNotFoundError extends Error { readonly statusCode = 404; }
+export class AppointmentConflictError extends Error { readonly statusCode = 409; }
+export class AppointmentRuleError extends Error { readonly statusCode = 400; }
+
+const appointmentSelect = {
+  id: true,
+  patientId: true,
+  department: true,
+  appointmentDate: true,
+  symptoms: true,
+  isEmergency: true,
+  status: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+  patient: { select: { id: true, name: true, email: true, phone: true } }
+} as const;
+
+function utcHourRange(date: Date): { start: Date; end: Date } {
+  const start = new Date(date);
+  start.setUTCMinutes(0, 0, 0);
+  const end = new Date(start);
+  end.setUTCHours(end.getUTCHours() + 1);
+  return { start, end };
 }
 
-export class AppointmentNotFoundError extends Error {
-  constructor(id: string) {
-    super(`Appointment with ID '${id}' was not found`);
-    this.name = 'AppointmentNotFoundError';
+async function ensureNoCollision(department: Department, appointmentDate: Date, excludeId?: string): Promise<void> {
+  const { start, end } = utcHourRange(appointmentDate);
+  const collision = await prisma.appointment.findFirst({
+    where: {
+      department,
+      appointmentDate: { gte: start, lt: end },
+      status: { not: AppointmentStatus.CANCELLED },
+      ...(excludeId ? { id: { not: excludeId } } : {})
+    },
+    select: { id: true }
+  });
+  if (collision) {
+    throw new AppointmentConflictError('That department already has an active appointment in the requested UTC hour');
   }
 }
 
-export class AppointmentCollisionError extends Error {
-  constructor() {
-    super('An appointment already exists in this department at the same hour');
-    this.name = 'AppointmentCollisionError';
+export async function createAppointment(patientId: string, input: CreateAppointmentInput) {
+  const appointmentDate = new Date(input.appointmentDate);
+  await ensureNoCollision(input.department as Department, appointmentDate);
+
+  try {
+    return await prisma.appointment.create({
+      data: {
+        patientId,
+        department: input.department as Department,
+        appointmentDate,
+        symptoms: input.symptoms,
+        isEmergency: input.isEmergency
+      },
+      select: appointmentSelect
+    });
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      throw new AppointmentRuleError('Patient account does not exist');
+    }
+    throw error;
   }
 }
 
-const appointments: Appointment[] = [];
-
-function sameDepartmentAndHour(a: Appointment, b: { department: Department; appointmentDate: string }): boolean {
-  if (a.department !== b.department) return false;
-  const first = new Date(a.appointmentDate);
-  const second = new Date(b.appointmentDate);
-  return (
-    first.getUTCFullYear() === second.getUTCFullYear() &&
-    first.getUTCMonth() === second.getUTCMonth() &&
-    first.getUTCDate() === second.getUTCDate() &&
-    first.getUTCHours() === second.getUTCHours()
-  );
-}
-
-function assertNoCollision(input: { department: Department; appointmentDate: string }, ignoreId?: string): void {
-  const collision = appointments.some(
-    (appointment) => appointment.id !== ignoreId && sameDepartmentAndHour(appointment, input),
-  );
-  if (collision) throw new AppointmentCollisionError();
-}
-
-export function createAppointment(input: CreateAppointmentInput): Appointment {
-  assertNoCollision(input);
-  const now = new Date().toISOString();
-  const appointment: Appointment = {
-    id: randomUUID(),
-    ...input,
-    appointmentDate: new Date(input.appointmentDate).toISOString(),
-    createdAt: now,
-    updatedAt: now,
+export async function listAppointments(userId: string, canReadAll: boolean, filters: ListAppointmentsInput) {
+  const where: Prisma.AppointmentWhereInput = {
+    ...(canReadAll ? {} : { patientId: userId }),
+    ...(filters.department ? { department: filters.department as Department } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.isEmergency === undefined ? {} : { isEmergency: filters.isEmergency }),
+    ...(filters.search ? {
+      OR: [
+        { symptoms: { contains: filters.search, mode: 'insensitive' } },
+        { patient: { name: { contains: filters.search, mode: 'insensitive' } } }
+      ]
+    } : {})
   };
-  appointments.push(appointment);
+
+  return prisma.appointment.findMany({ where, orderBy: { appointmentDate: 'asc' }, select: appointmentSelect });
+}
+
+export async function getAppointment(id: string) {
+  const appointment = await prisma.appointment.findUnique({ where: { id }, select: appointmentSelect });
+  if (!appointment) throw new AppointmentNotFoundError('Appointment not found');
   return appointment;
 }
 
-export function listAppointments(filters: ListAppointmentsQuery): Appointment[] {
-  const search = filters.search?.toLowerCase();
-  return appointments.filter((appointment) => {
-    const departmentMatches = !filters.department || appointment.department === filters.department;
-    const emergencyMatches = filters.isEmergency === undefined || appointment.isEmergency === filters.isEmergency;
-    const searchMatches =
-      !search ||
-      appointment.patientName.toLowerCase().includes(search) ||
-      appointment.symptoms.toLowerCase().includes(search);
-    return departmentMatches && emergencyMatches && searchMatches;
+export async function updateOwnAppointment(id: string, patientId: string, input: UpdateAppointmentInput) {
+  const appointment = await prisma.appointment.findUnique({ where: { id }, select: { id: true, patientId: true, status: true, department: true } });
+  if (!appointment) throw new AppointmentNotFoundError('Appointment not found');
+  if (appointment.patientId !== patientId) throw new AppointmentRuleError('You can only modify your own appointment');
+  if (appointment.status !== AppointmentStatus.PENDING) throw new AppointmentRuleError('Only PENDING appointments can be modified by patients');
+
+  if (input.appointmentDate) {
+    await ensureNoCollision(appointment.department, new Date(input.appointmentDate), id);
+  }
+
+  return prisma.appointment.update({
+    where: { id },
+    data: {
+      ...(input.appointmentDate ? { appointmentDate: new Date(input.appointmentDate) } : {}),
+      ...(input.symptoms !== undefined ? { symptoms: input.symptoms } : {})
+    },
+    select: appointmentSelect
   });
 }
 
-export function getAppointmentById(id: string): Appointment {
-  const appointment = appointments.find((item) => item.id === id);
-  if (!appointment) throw new AppointmentNotFoundError(id);
-  return appointment;
-}
+export async function updateStatus(id: string, input: UpdateStatusInput) {
+  const appointment = await prisma.appointment.findUnique({ where: { id }, select: { status: true } });
+  if (!appointment) throw new AppointmentNotFoundError('Appointment not found');
 
-export function updateAppointment(id: string, input: UpdateAppointmentInput): Appointment {
-  const appointment = getAppointmentById(id);
-  const nextDepartment = input.department ?? appointment.department;
-  const nextDate = input.appointmentDate ?? appointment.appointmentDate;
-  assertNoCollision({ department: nextDepartment, appointmentDate: nextDate }, id);
-
-  Object.assign(appointment, input);
-  if (input.appointmentDate) appointment.appointmentDate = new Date(input.appointmentDate).toISOString();
-  appointment.updatedAt = new Date().toISOString();
-  return appointment;
-}
-
-export function deleteAppointment(id: string): void {
-  const index = appointments.findIndex((item) => item.id === id);
-  if (index === -1) throw new AppointmentNotFoundError(id);
-  appointments.splice(index, 1);
-}
-
-export function getOverviewStats() {
-  const byDepartment: Record<Department, number> = {
-    GENERAL_PRACTICE: 0,
-    DENTISTRY: 0,
-    CARDIOLOGY: 0,
-    DERMATOLOGY: 0,
-    PEDIATRICS: 0,
+  const allowed: Record<AppointmentStatus, AppointmentStatus[]> = {
+    PENDING: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED],
+    CONFIRMED: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
+    COMPLETED: [],
+    CANCELLED: []
   };
-  let emergency = 0;
-  for (const appointment of appointments) {
-    byDepartment[appointment.department] += 1;
-    if (appointment.isEmergency) emergency += 1;
+  if (!allowed[appointment.status].includes(input.status)) {
+    throw new AppointmentRuleError(`Invalid status transition from ${appointment.status} to ${input.status}`);
   }
-  return {
-    total: appointments.length,
-    byDepartment,
-    byEmergencyStatus: {
-      emergency,
-      nonEmergency: appointments.length - emergency,
-    },
-  };
+
+  return prisma.appointment.update({ where: { id }, data: { status: input.status }, select: appointmentSelect });
 }
 
-export function clearAppointments(): void {
-  appointments.length = 0;
+export async function deleteOwnAppointment(id: string, patientId: string): Promise<void> {
+  const appointment = await prisma.appointment.findUnique({ where: { id }, select: { patientId: true, status: true } });
+  if (!appointment) throw new AppointmentNotFoundError('Appointment not found');
+  if (appointment.patientId !== patientId) throw new AppointmentRuleError('You can only cancel your own appointment');
+  if (appointment.status !== AppointmentStatus.PENDING) throw new AppointmentRuleError('Only PENDING appointments can be cancelled by patients');
+  await prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CANCELLED } });
+}
+
+export async function clearAppointments(): Promise<void> {
+  await prisma.appointment.deleteMany();
+}
+
+export async function getAdminMetrics() {
+  const [totalPatients, bookingsByDepartment] = await Promise.all([
+    prisma.user.count({ where: { role: { name: 'PATIENT' } } }),
+    prisma.appointment.groupBy({ by: ['department'], _count: { _all: true }, orderBy: { department: 'asc' } })
+  ]);
+
+  return {
+    totalRegisteredPatients: totalPatients,
+    bookingsPerDepartment: bookingsByDepartment.map((item) => ({ department: item.department, count: item._count._all }))
+  };
 }

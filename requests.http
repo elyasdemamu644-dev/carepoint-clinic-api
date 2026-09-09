@@ -1,38 +1,82 @@
+@baseUrl = http://localhost:3000
+@accessToken = REPLACE_WITH_ACCESS_TOKEN
+@appointmentId = REPLACE_WITH_APPOINTMENT_ID
+
 ### Health
-GET http://localhost:3000/api/health
+GET {{baseUrl}}/api/health
+
+### Register patient
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Abebe Kebede",
+  "email": "ABEBE@example.com",
+  "password": "StrongPass1!",
+  "phone": "+251911234567"
+}
+
+### Login patient
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "abebe@example.com",
+  "password": "StrongPass1!"
+}
+
+### Refresh (requires refresh cookie from login/register)
+POST {{baseUrl}}/api/auth/refresh
 
 ### Create appointment
-POST http://localhost:3000/api/appointments
+POST {{baseUrl}}/api/appointments
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "patientName": "Abebe Kebede",
-  "patientEmail": "ABEBE@example.com",
-  "patientPhone": "+251911234567",
   "department": "GENERAL_PRACTICE",
-  "appointmentDate": "2099-09-02T10:30:00.000Z",
-  "symptoms": "Persistent headache for three days"
+  "appointmentDate": "2026-09-10T10:30:00.000Z",
+  "symptoms": "Persistent headache for three days",
+  "isEmergency": false
 }
 
-### List
-GET http://localhost:3000/api/appointments
+### List own appointments
+GET {{baseUrl}}/api/appointments
+Authorization: Bearer {{accessToken}}
 
-### Filter
-GET http://localhost:3000/api/appointments?department=GENERAL_PRACTICE&isEmergency=false&search=headache
+### List with filters
+GET {{baseUrl}}/api/appointments?department=GENERAL_PRACTICE&status=PENDING&isEmergency=false&search=headache
+Authorization: Bearer {{accessToken}}
 
-### Stats
-GET http://localhost:3000/api/appointments/stats/overview
+### Get appointment
+GET {{baseUrl}}/api/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
 
-### Get by ID
-GET http://localhost:3000/api/appointments/REPLACE_ID
-
-### Update
-PATCH http://localhost:3000/api/appointments/REPLACE_ID
+### Update appointment
+PATCH {{baseUrl}}/api/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "symptoms": "Updated symptoms with enough detail"
+  "symptoms": "Headache has continued for five days"
 }
 
-### Delete
-DELETE http://localhost:3000/api/appointments/REPLACE_ID
+### Cancel own pending appointment
+DELETE {{baseUrl}}/api/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
+
+### Doctor login (seed first)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "doctor@carepoint.local",
+  "password": "DoctorPassword1!"
+}
+
+### Admin metrics (replace token with admin access token)
+GET {{baseUrl}}/api/admin/metrics
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+
+### Start Google OAuth in browser
+GET {{baseUrl}}/api/auth/google

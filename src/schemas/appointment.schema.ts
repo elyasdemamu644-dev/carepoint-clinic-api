@@ -5,88 +5,77 @@ export const DepartmentEnum = z.enum([
   'DENTISTRY',
   'CARDIOLOGY',
   'DERMATOLOGY',
-  'PEDIATRICS',
+  'PEDIATRICS'
 ]);
 
-const phoneSchema = z
-  .string()
-  .trim()
-  .regex(/^\+?[0-9]{10,14}$/, 'Invalid phone number format (10-14 digits)');
+export const AppointmentStatusEnum = z.enum([
+  'PENDING',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELLED'
+]);
 
-const appointmentDateSchema = z
-  .string({ required_error: 'Appointment datetime is required' })
+const futureClinicDate = z.string()
   .datetime({ message: 'Must be a valid ISO-8601 datetime string' })
   .refine((value) => new Date(value).getTime() > Date.now(), {
-    message: 'Appointment date must be in the future',
+    message: 'Appointment date must be in the future'
   })
-  .refine(
-    (value) => {
-      const hour = new Date(value).getUTCHours();
-      return hour >= 8 && hour < 17;
-    },
-    { message: 'Appointments must be scheduled during clinic hours (08:00 - 17:00 UTC)' },
-  );
+  .refine((value) => {
+    const date = new Date(value);
+    const hour = date.getUTCHours();
+    return hour >= 8 && hour < 17;
+  }, {
+    message: 'Appointments must be scheduled during clinic hours (08:00 - 17:00 UTC)'
+  });
 
-export const AppointmentFieldsSchema = z.object({
-  patientName: z
-    .string({ required_error: 'Patient name is required' })
-    .trim()
-    .min(3, 'Name must have at least 3 characters')
-    .max(60, 'Name must not exceed 60 characters'),
-  patientEmail: z
-    .string({ required_error: 'Patient email is required' })
-    .trim()
-    .email('Invalid email address format')
-    .toLowerCase(),
-  patientPhone: phoneSchema,
-  department: DepartmentEnum,
-  appointmentDate: appointmentDateSchema,
-  isEmergency: z.boolean().default(false),
-  symptoms: z
-    .string({ required_error: 'Symptoms description is required' })
-    .trim()
-    .min(10, 'Please provide at least 10 characters describing symptoms'),
-}).strict();
+const symptomsSchema = z.string().trim().min(10).max(1000);
 
 export const CreateAppointmentSchema = z.object({
-  body: AppointmentFieldsSchema,
-  query: z.record(z.unknown()).optional(),
-  params: z.record(z.unknown()).optional(),
-});
-
-const AppointmentParamsSchema = z.object({
-  id: z.string().trim().min(1, 'Appointment ID is required'),
+  body: z.object({
+    department: DepartmentEnum,
+    appointmentDate: futureClinicDate,
+    symptoms: symptomsSchema,
+    isEmergency: z.boolean().default(false)
+  }).strict()
 });
 
 export const UpdateAppointmentSchema = z.object({
-  body: AppointmentFieldsSchema.partial().refine((body) => Object.keys(body).length > 0, {
-    message: 'At least one editable field is required',
-    path: [],
-  }),
-  params: AppointmentParamsSchema,
-  query: z.record(z.unknown()).optional(),
+  body: z.object({
+    appointmentDate: futureClinicDate.optional(),
+    symptoms: symptomsSchema.optional()
+  }).strict().refine((body) => Object.keys(body).length > 0, {
+    message: 'At least one editable field is required'
+  })
+});
+
+export const UpdateStatusSchema = z.object({
+  body: z.object({
+    status: AppointmentStatusEnum
+  }).strict()
 });
 
 export const AppointmentIdSchema = z.object({
-  params: AppointmentParamsSchema,
-  body: z.record(z.unknown()).optional(),
-  query: z.record(z.unknown()).optional(),
+  params: z.object({ id: z.string().uuid('Appointment ID must be a valid UUID') }).strict()
+});
+
+export const GoogleCallbackSchema = z.object({
+  query: z.object({
+    code: z.string().min(1).optional(),
+    state: z.string().min(1).optional(),
+    error: z.string().optional()
+  }).strict()
 });
 
 export const ListAppointmentsSchema = z.object({
   query: z.object({
     department: DepartmentEnum.optional(),
-    search: z.string().trim().optional(),
-    isEmergency: z
-      .enum(['true', 'false'])
-      .transform((value) => value === 'true')
-      .optional(),
-  }),
-  body: z.record(z.unknown()).optional(),
-  params: z.record(z.unknown()).optional(),
+    status: AppointmentStatusEnum.optional(),
+    isEmergency: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    search: z.string().trim().min(1).max(100).optional()
+  }).strict()
 });
 
-export type CreateAppointmentInput = z.infer<typeof AppointmentFieldsSchema>;
+export type CreateAppointmentInput = z.infer<typeof CreateAppointmentSchema>['body'];
 export type UpdateAppointmentInput = z.infer<typeof UpdateAppointmentSchema>['body'];
-export type Department = z.infer<typeof DepartmentEnum>;
-export type ListAppointmentsQuery = z.infer<typeof ListAppointmentsSchema>['query'];
+export type UpdateStatusInput = z.infer<typeof UpdateStatusSchema>['body'];
+export type ListAppointmentsInput = z.infer<typeof ListAppointmentsSchema>['query'];

@@ -1,29 +1,42 @@
 {
-  "name": "carepoint-clinic-api",
+  "name": "carepoint-enterprise-api",
   "version": "1.0.0",
-  "description": "Healthcare Appointment Booking API for Assignment 7",
-  "main": "dist/server.js",
+  "private": true,
+  "author": "Elyas Demamu | ID: ETS0489/17",
+  "description": "Assignment 8 - Enterprise Healthcare Booking API with JWT, PBAC, ABAC and Google OAuth 2.0",
+  "type": "module",
+  "engines": { "node": ">=18" },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "tsx tests/api.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test tests/*.test.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force"
   },
-  "keywords": ["nodejs", "typescript", "express", "zod", "healthcare", "appointments"],
-  "author": "",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18"
-  },
+  "prisma": { "seed": "tsx prisma/seed.ts" },
   "dependencies": {
-    "express": "^4.21.2",
-    "zod": "^3.25.76"
+    "@prisma/client": "6.12.0",
+    "bcrypt": "6.0.0",
+    "cookie-parser": "1.4.7",
+    "dotenv": "16.6.1",
+    "express": "5.1.0",
+    "google-auth-library": "10.3.0",
+    "jsonwebtoken": "9.0.2",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^22.15.30",
-    "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "@types/bcrypt": "5.0.2",
+    "@types/cookie-parser": "1.4.9",
+    "@types/express": "5.0.3",
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "24.3.0",
+    "prisma": "6.12.0",
+    "tsx": "4.20.5",
+    "typescript": "5.8.3"
   }
 }

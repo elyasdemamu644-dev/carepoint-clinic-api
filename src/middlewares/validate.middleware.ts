@@ -7,19 +7,19 @@ export const validateRequest = (schema: AnyZodObject) => {
       const parsed = await schema.parseAsync({
         body: req.body,
         query: req.query,
-        params: req.params,
+        params: req.params
       });
       res.locals.validated = parsed;
       next();
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof ZodError) {
         res.status(400).json({
           status: 'error',
           message: 'Input validation failed',
-          errors: error.errors.map((err) => ({
-            field: err.path.join('.').replace(/^body\./, '').replace(/^query\./, 'query.'),
-            message: err.message,
-          })),
+          errors: error.issues.map((issue) => ({
+            field: issue.path.join('.').replace(/^body\./, '').replace(/^query\./, 'query.').replace(/^params\./, 'params.'),
+            message: issue.message
+          }))
         });
         return;
       }

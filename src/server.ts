@@ -1,11 +1,18 @@
 import { app } from './app.js';
+import { env } from './config/env.js';
+import { prisma } from './lib/prisma.js';
 
-const port = Number(process.env.PORT ?? 3000);
+const server = app.listen(env.PORT, () => {
+  console.log(`CarePoint Enterprise API listening on http://localhost:${env.PORT}`);
+});
 
-if (!Number.isInteger(port) || port < 1 || port > 65535) {
-  throw new Error('PORT must be a valid integer between 1 and 65535');
+async function shutdown(signal: string): Promise<void> {
+  console.log(`${signal} received. Shutting down gracefully...`);
+  server.close(async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
 }
 
-app.listen(port, () => {
-  console.log(`CarePoint Clinic API running at http://localhost:${port}`);
-});
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });

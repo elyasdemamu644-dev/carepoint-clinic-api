@@ -1,9 +1,15 @@
-import type { CreateAppointmentInput, UpdateAppointmentInput } from '../schemas/appointment.schema.js';
+export interface AuthUser {
+  userId: string;
+  email: string;
+  role: string;
+  permissions: string[];
+  tokenVersion: number;
+}
 
 declare global {
   namespace Express {
     interface Request {
-      validatedBody?: CreateAppointmentInput | UpdateAppointmentInput;
+      user?: AuthUser;
     }
   }
 }

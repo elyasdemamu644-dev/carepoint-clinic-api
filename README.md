@@ -1,258 +1,539 @@
-# CarePoint Clinic — Healthcare Appointment Booking API
+# CarePoint Enterprise Healthcare Booking API
+**Author:** Elyas Demamu  
+**ID:** ETS0489/17
+**Healthcare Booking API with Authentication and Authorization**
 
-## Author
+This project upgrades the Assignment 7 CarePoint appointment API into an enterprise-style backend using **TypeScript, Express, Zod, PostgreSQL, Prisma, JWT, Bcrypt, PBAC, ABAC/ownership checks, and Google OAuth 2.0/OpenID Connect**.
 
-- Name: Elyas Demamu
-- ID: 0489/17
 
-Assignment 7: Healthcare Appointment Booking API
-Course: Backend Development with Node.js & TypeScript
+## 1. Requirements implemented
 
-## Overview
+- Strict Zod request validation and query coercion.
+- TypeScript types inferred from Zod schemas.
+- PostgreSQL persistence through Prisma.
+- Normalized User / Role / Permission / RolePermission / Account / Appointment models.
+- Cascade deletes where specified by the brief.
+- Indexes and unique constraints.
+- Local registration and login.
+- Bcrypt password hashing with configurable cost, default **12**.
+- 15-minute access token and 7-day refresh token defaults.
+- Refresh token stored only as a SHA-256 hash in PostgreSQL.
+- httpOnly + SameSite=Strict refresh cookie.
+- Refresh Token Rotation (RTR).
+- Refresh-token replay/reuse detection that revokes the user's refresh sessions.
+- Google OAuth 2.0 / OpenID Connect authorization-code flow.
+- Google account linking by verified email without duplicate User rows.
+- Nullable local password for Google-only users.
+- PBAC using permission strings in access-token claims.
+- ABAC/resource ownership checks preventing patient IDOR.
+- Appointment collision guard: same department + same UTC hour returns 409.
+- Appointment status transition guard.
+- Admin metrics endpoint.
+- Layered routes → middleware → controllers → services → Prisma architecture.
+- Centralized error handling and predictable HTTP status codes.
 
-A strictly typed Express REST API demonstrating Zod runtime validation, TypeScript type inference, layered architecture, business-rule validation, CRUD operations, predictable HTTP errors, filtering, and optional stretch features.
-
-The assignment specifies in-memory arrays as the default storage option, so this implementation intentionally uses an in-memory service. Data resets whenever the server restarts.
-
-## Technology
-
-- Node.js 18+
-- TypeScript
-- Express.js
-- Zod
-- In-memory storage
-- Postman / Thunder Client / Bruno / curl
-
-Prisma is not required for the core assignment and is therefore not added as an unnecessary dependency.
-
-## Project structure
+## 2. Project structure
 
 ```text
-carepoint-clinic-api/
+carepoint-enterprise-api/
 ├── package.json
 ├── tsconfig.json
 ├── .env.example
 ├── .gitignore
+├── .npmrc
 ├── README.md
+├── requests.http
+├── prisma/
+│   ├── schema.prisma
+│   ├── seed.ts
+│   └── migrations/
+│       └── 20260907120000_init/
+│           └── migration.sql
 ├── src/
 │   ├── app.ts
 │   ├── server.ts
+│   ├── config/
+│   │   └── env.ts
+│   ├── lib/
+│   │   └── prisma.ts
 │   ├── schemas/
-│   │   └── appointment.schema.ts
+│   │   ├── auth.schema.ts
+│   │   ├── appointment.schema.ts
+│   │   └── common.schema.ts
 │   ├── middlewares/
 │   │   ├── validate.middleware.ts
+│   │   ├── auth.middleware.ts
+│   │   ├── permission.middleware.ts
+│   │   ├── ownership.middleware.ts
+│   │   ├── not-found.middleware.ts
 │   │   └── error.middleware.ts
 │   ├── controllers/
-│   │   └── appointment.controller.ts
+│   │   ├── auth.controller.ts
+│   │   ├── oauth.controller.ts
+│   │   ├── appointment.controller.ts
+│   │   └── admin.controller.ts
 │   ├── services/
+│   │   ├── auth.service.ts
+│   │   ├── oauth.service.ts
 │   │   └── appointment.service.ts
 │   ├── routes/
-│   │   └── appointment.routes.ts
-│   └── types/
-│       └── express.d.ts
+│   │   ├── auth.routes.ts
+│   │   ├── appointment.routes.ts
+│   │   └── admin.routes.ts
+│   ├── types/
+│   │   └── express.d.ts
+│   └── utils/
+│       └── auth.util.ts
 └── tests/
-    └── api.test.ts
+    └── validation.test.ts
 ```
 
-## Install and run
+## 3. Installation
+
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL
+- npm
+- A Google Cloud OAuth client only if Google Sign-In is being tested
+
+### Install
 
 ```bash
 npm install
+```
+
+### Environment
+
+Copy `.env.example` to `.env` and replace the secrets/database values.
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+**Never commit `.env`.**
+
+## 4. PostgreSQL setup
+
+Create a database, for example:
+
+```sql
+CREATE DATABASE carepoint;
+```
+
+Then set:
+
+```env
+DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/carepoint"
+```
+
+Generate the Prisma client:
+
+```bash
+npm run prisma:generate
+```
+
+Apply the committed migration:
+
+```bash
+npm run prisma:deploy
+```
+
+For local development, this is also valid:
+
+```bash
+npm run prisma:migrate
+```
+
+Seed roles, permissions, and development doctor/admin accounts:
+
+```bash
+npm run prisma:seed
+```
+
+## 5. Start the API
+
+Development:
+
+```bash
 npm run dev
 ```
 
-Production-style run:
+Build:
 
 ```bash
 npm run build
+```
+
+Production-style start:
+
+```bash
 npm start
 ```
 
-Type check only:
+Type-check only:
 
 ```bash
 npm run typecheck
 ```
 
-Run the automated API checks:
+The default API URL is:
 
-```bash
-npm test
+```text
+http://localhost:3000
 ```
 
-The default server URL is `http://localhost:3000`.
+## 6. Seeded development accounts
 
-## Environment
+After `npm run prisma:seed`:
 
-Copy `.env.example` to `.env` if desired. The app uses `PORT=3000` by default. No database or secret is required for the core assignment.
+- Doctor: `doctor@carepoint.local`
+- Admin: `admin@carepoint.local`
 
-## API endpoints
+Their passwords come from `SEED_DOCTOR_PASSWORD` and `SEED_ADMIN_PASSWORD` in `.env`.
 
-| Method | Endpoint | Purpose | Status |
+Change those values before using the project outside local development.
+
+## 7. Authentication endpoints
+
+| Method | Endpoint | Access | Result |
 |---|---|---|---|
-| POST | `/api/appointments` | Create appointment | 201 |
-| GET | `/api/appointments` | List/filter/search appointments | 200 |
-| GET | `/api/appointments/:id` | Get one appointment | 200 / 404 |
-| PATCH | `/api/appointments/:id` | Update editable fields | 200 / 400 / 404 / 409 |
-| DELETE | `/api/appointments/:id` | Delete appointment | 204 / 404 |
-| GET | `/api/appointments/stats/overview` | Bonus summary | 200 |
-| GET | `/api/health` | Health check | 200 |
+| POST | `/api/auth/register` | Public | Creates patient + access token + refresh cookie |
+| POST | `/api/auth/login` | Public | Returns access token + refresh cookie |
+| POST | `/api/auth/refresh` | Refresh cookie | Rotates both tokens |
+| POST | `/api/auth/logout` | Authenticated | Revokes refresh session + clears cookie |
+| GET | `/api/auth/google` | Public | Starts Google OAuth |
+| GET | `/api/auth/google/callback` | Public | Validates Google identity, links account, issues tokens |
 
-## Validation rules
+### Access token usage
 
-- Patient name: trimmed, 3–60 characters.
-- Email: valid email, trimmed and converted to lowercase.
-- Phone: `+` optional, 10–14 digits.
-- Department: `GENERAL_PRACTICE`, `DENTISTRY`, `CARDIOLOGY`, `DERMATOLOGY`, `PEDIATRICS`.
-- Appointment date: ISO-8601 datetime, must be in the future.
-- Clinic hours: 08:00 inclusive through before 17:00 UTC.
-- Symptoms: trimmed, minimum 10 characters.
-- Emergency: boolean, defaults to `false`.
-- PATCH requires at least one editable field.
-
-## Important date note
-
-The assignment defines clinic hours as UTC. Send appointment datetimes with an explicit UTC `Z` suffix, for example `2026-09-02T10:30:00.000Z`. This avoids timezone ambiguity between clients and the server.
-
-## Valid POST example
-
-```bash
-curl -X POST http://localhost:3000/api/appointments \
-  -H "Content-Type: application/json" \
-  -d '{
-    "patientName": "Abebe Kebede",
-    "patientEmail": "ABEBE@example.com",
-    "patientPhone": "+251911234567",
-    "department": "GENERAL_PRACTICE",
-    "appointmentDate": "2099-09-02T10:30:00.000Z",
-    "symptoms": "Persistent headache for three days",
-    "isEmergency": false
-  }'
-```
-
-Expected result: HTTP `201 Created`; the email is returned in lowercase and `id`, `createdAt`, and `updatedAt` are generated by the service.
-
-## Invalid POST examples
-
-### Past date
-
-```json
-{
-  "patientName": "Abebe Kebede",
-  "patientEmail": "abebe@example.com",
-  "patientPhone": "+251911234567",
-  "department": "GENERAL_PRACTICE",
-  "appointmentDate": "2020-01-01T10:30:00.000Z",
-  "symptoms": "Persistent headache for three days"
-}
-```
-
-Returns HTTP `400` with a field-level validation error explaining that the appointment must be in the future.
-
-### Invalid email and phone
-
-```json
-{
-  "patientName": "Abebe Kebede",
-  "patientEmail": "not-an-email",
-  "patientPhone": "123",
-  "department": "DENTISTRY",
-  "appointmentDate": "2099-09-02T11:00:00.000Z",
-  "symptoms": "Tooth pain when eating food"
-}
-```
-
-Returns HTTP `400` with specific validation errors.
-
-## List filters
-
-Department:
-
-```text
-GET /api/appointments?department=DENTISTRY
-```
-
-Search patient name or symptoms:
-
-```text
-GET /api/appointments?search=headache
-```
-
-Emergency only:
-
-```text
-GET /api/appointments?isEmergency=true
-```
-
-Filters can be combined.
-
-## PATCH example
+Send the short-lived access token as:
 
 ```http
-PATCH /api/appointments/<id>
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+The refresh token is intentionally **not** returned in JSON. It is stored in an httpOnly cookie.
+
+## 8. Registration
+
+```http
+POST /api/auth/register
 Content-Type: application/json
 ```
 
 ```json
 {
-  "symptoms": "Headache has continued for five days"
+  "name": "Abebe Kebede",
+  "email": "ABEBE@example.com",
+  "password": "StrongPass1!",
+  "phone": "+251911234567"
 }
 ```
 
-An empty `{}` body is rejected with HTTP `400`.
+Password requirements:
 
-## Collision guard (stretch feature)
+- At least 8 characters.
+- At least one uppercase letter.
+- At least one lowercase letter.
+- At least one digit.
+- At least one special symbol.
 
-The service prevents two appointments from being booked in the same department during the same UTC hour on the same date. A collision returns HTTP `409 Conflict`.
+The email is trimmed and normalized to lowercase.
 
-## Error response format
+## 9. Login
 
-Validation errors use a predictable structure:
+```http
+POST /api/auth/login
+Content-Type: application/json
+```
 
 ```json
 {
-  "status": "error",
-  "message": "Input validation failed",
-  "errors": [
-    {
-      "field": "patientEmail",
-      "message": "Invalid email address format"
-    }
-  ]
+  "email": "abebe@example.com",
+  "password": "StrongPass1!"
 }
 ```
 
-Not-found and business-rule errors use the same top-level `status` and `message` pattern.
+A successful login returns the access token and sets the 7-day httpOnly refresh cookie.
 
-## Testing checklist
+## 10. Refresh Token Rotation and replay detection
 
-1. `GET /api/health` → 200.
-2. Valid POST → 201.
-3. Missing required field → 400.
-4. Invalid email → 400.
-5. Invalid phone → 400.
-6. Invalid department → 400.
-7. Past date → 400.
-8. Outside 08:00–17:00 UTC → 400.
-9. GET list → 200.
-10. GET by existing ID → 200.
-11. GET by unknown ID → 404.
-12. PATCH with valid field → 200.
-13. PATCH `{}` → 400.
-14. DELETE existing ID → 204.
-15. DELETE unknown ID → 404.
-16. Unknown route → 404.
-17. Duplicate department/hour → 409 (stretch feature).
-18. Overview stats → 200 (stretch feature).
+Call:
 
-## Architecture
-
-Request flow:
-
-```text
-Routes → Validation Middleware → Controller → Service → In-memory storage
-                                  ↓
-                         Error Middleware
+```http
+POST /api/auth/refresh
 ```
 
-Zod schemas own runtime input contracts. Controllers handle HTTP concerns. Services own business rules and storage. This keeps the code easy to understand while still being scalable.
+The browser/client sends the refresh cookie automatically.
+
+On success, the server:
+
+1. Verifies the refresh JWT.
+2. Hashes the presented token with SHA-256.
+3. Compares it with the stored refresh-token hash.
+4. Issues a new 15-minute access token.
+5. Issues a new 7-day refresh token.
+6. Atomically replaces the stored hash.
+
+If an already-rotated refresh token is presented, the hash no longer matches. The server increments `tokenVersion`, clears the stored refresh hash, and returns **403 Forbidden**, revoking the user's active refresh session.
+
+## 11. Google OAuth 2.0 / OpenID Connect
+
+Create a Google OAuth Web application and configure this redirect URI:
+
+```text
+http://localhost:3000/api/auth/google/callback
+```
+
+Set:
+
+```env
+GOOGLE_CLIENT_ID="your-client-id"
+GOOGLE_CLIENT_SECRET="your-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
+```
+
+Optional frontend redirect:
+
+```env
+GOOGLE_SUCCESS_REDIRECT="http://localhost:5173/oauth/success"
+```
+
+The callback verifies Google's ID token and requires a verified email. If the Google identity is new but its verified email belongs to an existing local account, the provider record is linked to that existing User rather than creating a duplicate User.
+
+If `GOOGLE_SUCCESS_REDIRECT` is configured, the access token is returned in the URL fragment (`#accessToken=...`) rather than a query parameter, so it is not sent as an HTTP Referer to the destination server.
+
+## 12. PBAC permissions
+
+Permissions seeded by `prisma/seed.ts`:
+
+- `appointments:create`
+- `appointments:read_own`
+- `appointments:read_all`
+- `appointments:update_own`
+- `appointments:manage_status`
+- `appointments:delete_own`
+- `system:admin`
+
+Roles:
+
+### PATIENT
+
+- create appointments
+- read own appointments
+- update own pending appointments
+- cancel own pending appointments
+
+### DOCTOR
+
+- read all appointments
+- manage appointment status
+
+### ADMIN
+
+- all listed permissions
+
+Permissions are embedded into the short-lived access token, allowing authorization middleware to make PBAC decisions without a database lookup for every request.
+
+## 13. Appointment endpoints
+
+| Method | Endpoint | Permission | Main rule |
+|---|---|---|---|
+| POST | `/api/appointments` | `appointments:create` | Appointment belongs to `req.user.userId` |
+| GET | `/api/appointments` | Authenticated | Patient sees own; authorized clinicians/admins can see all |
+| GET | `/api/appointments/:id` | `appointments:read_own` | Owner OR `appointments:read_all` |
+| PATCH | `/api/appointments/:id` | `appointments:update_own` | Owner + PENDING only; date/symptoms only |
+| PATCH | `/api/appointments/:id/status` | `appointments:manage_status` | Doctor/Admin status transitions |
+| DELETE | `/api/appointments/:id` | `appointments:delete_own` | Owner + PENDING only; implemented as cancellation |
+
+### Appointment creation
+
+```http
+POST /api/appointments
+Authorization: Bearer YOUR_ACCESS_TOKEN
+Content-Type: application/json
+```
+
+```json
+{
+  "department": "GENERAL_PRACTICE",
+  "appointmentDate": "2026-09-10T10:30:00.000Z",
+  "symptoms": "Persistent headache for three days",
+  "isEmergency": false
+}
+```
+
+Rules:
+
+- Department must be one of the five specified enum values.
+- Datetime must be ISO-8601.
+- Datetime must be strictly in the future.
+- UTC hour must be from 08:00 inclusive to before 17:00.
+- Symptoms: 10–1,000 characters.
+- Emergency defaults to false.
+- Status defaults to PENDING.
+
+## 14. Appointment list filters
+
+```text
+GET /api/appointments?department=DENTISTRY
+GET /api/appointments?status=PENDING
+GET /api/appointments?isEmergency=true
+GET /api/appointments?search=headache
+```
+
+Filters can be combined.
+
+`isEmergency=true` and `isEmergency=false` are coerced to booleans by Zod.
+
+## 15. Ownership / IDOR protection
+
+The server never trusts an appointment ID by itself.
+
+For owner-only operations, the ownership middleware loads the appointment and compares:
+
+```text
+appointment.patientId === req.user.userId
+```
+
+If another patient attempts to access, edit, or cancel the appointment, the API returns **403 Forbidden**.
+
+For `GET /api/appointments/:id`, a user with `appointments:read_all` can use the authorized override.
+
+## 16. Collision protection
+
+The API rejects an active appointment when another appointment already exists in the same department during the same UTC hour.
+
+Example:
+
+```text
+Existing: 2026-09-10T10:15:00Z, DENTISTRY
+New:      2026-09-10T10:45:00Z, DENTISTRY
+```
+
+Result:
+
+```http
+409 Conflict
+```
+
+Cancelled appointments do not block a new booking in that hour.
+
+## 17. Status transitions
+
+The service prevents invalid clinical status transitions:
+
+```text
+PENDING    -> CONFIRMED
+PENDING    -> CANCELLED
+CONFIRMED  -> COMPLETED
+CONFIRMED  -> CANCELLED
+```
+
+`COMPLETED` and `CANCELLED` are terminal states.
+
+## 18. Admin metrics
+
+```http
+GET /api/admin/metrics
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+```
+
+Required permission:
+
+```text
+system:admin
+```
+
+Returns total registered patients and appointment counts grouped by department.
+
+## 19. Health check
+
+```http
+GET /api/health
+```
+
+Returns HTTP 200 with a server timestamp and uptime.
+
+## 20. Error/status behavior
+
+The implementation uses the assignment's expected statuses, including:
+
+- `200 OK` — successful reads, updates, login, refresh, logout, health.
+- `201 Created` — registration and appointment creation.
+- `204 No Content` — patient cancellation endpoint.
+- `400 Bad Request` — Zod validation and invalid domain input.
+- `401 Unauthorized` — missing/invalid access authentication.
+- `403 Forbidden` — authorization failure, IDOR attempt, or refresh-token replay.
+- `404 Not Found` — missing appointment or route.
+- `409 Conflict` — collision or unique constraint conflict.
+- `500 Internal Server Error` — unexpected server errors.
+
+## 21. Testing and quality checks
+
+Static type check:
+
+```bash
+npm run typecheck
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+Validation tests:
+
+```bash
+npm test
+```
+
+Manual API requests are also provided in `requests.http`.
+
+### Recommended final verification order
+
+```bash
+npm install
+npm run prisma:generate
+npm run prisma:deploy
+npm run prisma:seed
+npm run typecheck
+npm run build
+npm test
+npm run dev
+```
+
+Then verify:
+
+1. Health endpoint.
+2. Patient registration.
+3. Patient login.
+4. Patient appointment creation.
+5. Own appointment list/read/update/cancel.
+6. Second patient cannot access the first patient's appointment.
+7. Doctor login and all-appointment access.
+8. Doctor status transition.
+9. Admin metrics.
+10. Duplicate department/hour returns 409.
+11. Refresh rotates the refresh token.
+12. Reusing the old refresh token returns 403 and revokes the refresh session.
+13. Google OAuth works when Google credentials are configured.
+14. Local account + same verified Google email links to one User record.
+
+## 22. Security notes
+
+- `.env` is ignored by Git.
+- Access tokens are short-lived.
+- Refresh tokens are httpOnly cookies.
+- Refresh tokens are never stored in plaintext in the database.
+- Refresh-token comparisons use a constant-time comparison after hashing.
+- Refresh rotation uses a conditional database update to reduce concurrent replay races.
+- Google OAuth state is signed and short-lived.
+- Google email must be verified before account linking.
+- Unknown request body fields are rejected by strict Zod objects.
+- Ownership is checked server-side against the authenticated user's ID.
+- Passwords are never returned in API responses.

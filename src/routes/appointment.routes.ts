@@ -1,27 +1,18 @@
 import { Router } from 'express';
-import {
-  createAppointmentController,
-  deleteAppointmentController,
-  getAppointmentController,
-  listAppointmentsController,
-  overviewController,
-  updateAppointmentController,
-} from '../controllers/appointment.controller.js';
+import { requireAuth } from '../middlewares/auth.middleware.js';
+import { requireAnyPermission, requirePermission } from '../middlewares/permission.middleware.js';
+import { requireAppointmentOwnership } from '../middlewares/ownership.middleware.js';
 import { validateRequest } from '../middlewares/validate.middleware.js';
-import {
-  AppointmentIdSchema,
-  CreateAppointmentSchema,
-  ListAppointmentsSchema,
-  UpdateAppointmentSchema,
-} from '../schemas/appointment.schema.js';
+import { AppointmentIdSchema, CreateAppointmentSchema, ListAppointmentsSchema, UpdateAppointmentSchema, UpdateStatusSchema } from '../schemas/appointment.schema.js';
+import { createAppointmentController, deleteAppointmentController, getAppointmentController, listAppointmentsController, updateAppointmentController, updateStatusController } from '../controllers/appointment.controller.js';
 
-const router = Router();
+export const appointmentRouter = Router();
 
-router.get('/stats/overview', overviewController);
-router.post('/', validateRequest(CreateAppointmentSchema), createAppointmentController);
-router.get('/', validateRequest(ListAppointmentsSchema), listAppointmentsController);
-router.get('/:id', validateRequest(AppointmentIdSchema), getAppointmentController);
-router.patch('/:id', validateRequest(UpdateAppointmentSchema), updateAppointmentController);
-router.delete('/:id', validateRequest(AppointmentIdSchema), deleteAppointmentController);
+appointmentRouter.use(requireAuth);
 
-export default router;
+appointmentRouter.post('/', requirePermission('appointments:create'), validateRequest(CreateAppointmentSchema), createAppointmentController);
+appointmentRouter.get('/', validateRequest(ListAppointmentsSchema), listAppointmentsController);
+appointmentRouter.get('/:id', validateRequest(AppointmentIdSchema), requireAnyPermission('appointments:read_own', 'appointments:read_all'), requireAppointmentOwnership({ allowReadAllOverride: true }), getAppointmentController);
+appointmentRouter.patch('/:id', validateRequest(AppointmentIdSchema), requirePermission('appointments:update_own'), requireAppointmentOwnership(), validateRequest(UpdateAppointmentSchema), updateAppointmentController);
+appointmentRouter.patch('/:id/status', validateRequest(AppointmentIdSchema), requirePermission('appointments:manage_status'), validateRequest(UpdateStatusSchema), updateStatusController);
+appointmentRouter.delete('/:id', validateRequest(AppointmentIdSchema), requirePermission('appointments:delete_own'), requireAppointmentOwnership(), deleteAppointmentController);
